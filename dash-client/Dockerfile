@@ -4,6 +4,8 @@ FROM node:18
 # Définir le répertoire de travail
 WORKDIR /app
 
+RUN apt-get update && apt-get install -y iproute2
+
 # Copier les fichiers du client
 COPY package.json package-lock.json ./
 RUN npm install
