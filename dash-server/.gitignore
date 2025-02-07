@@ -3,4 +3,6 @@ node_modules
 .idea/
 .idea/*
 *m4s
+*.zip
 *.m4s
+videos/*
