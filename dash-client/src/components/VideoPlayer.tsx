@@ -4,15 +4,16 @@ import dashjs from "dashjs";
 const VideoPlayer = () => {
   const videoRef = useRef(null);
   const playerRef = useRef(null);
-  const lastQualityChangeTime = useRef(Date.now());
   const qualityCheckInterval = useRef(null);
+  const stableQualityTime = useRef(0); // Temps passé avec une qualité stable
+  const lastQuality = useRef(0); // Stocke la dernière qualité appliquée
 
   useEffect(() => {
     if (videoRef.current) {
       const player = dashjs.MediaPlayer().create();
       playerRef.current = player;
 
-      // Configuration améliorée de l'ABR
+      // ⚙️ Configuration avancée de l'ABR
       player.updateSettings({
         streaming: {
           abr: {
@@ -24,52 +25,59 @@ const VideoPlayer = () => {
           buffer: {
             fastSwitchEnabled: true,
             bufferToKeep: 5,
-            bufferTimeAtTopQuality: 15,
-            bufferTimeAtTopQualityLongForm: 20,
+            bufferTimeAtTopQuality: 200,
+            bufferTimeAtTopQualityLongForm: 300,
           },
         },
       });
 
+      player.updateSettings({ streaming: { abr: { autoSwitchBitrate: { video: false } } } });
+
+
+      // 📺 Initialisation du lecteur avec une vidéo DASH
       player.initialize(videoRef.current, "https://dash.akamaized.net/envivio/EnvivioDash3/manifest.mpd", true);
 
-      // Gestion des erreurs
-      player.on(dashjs.MediaPlayer.events.ERROR, (e) => {
-        console.error("🚨 Erreur DASH :", e);
-      });
-
-      // Affichage des qualités disponibles
-      setTimeout(() => {
-        const bitrates = player.getBitrateInfoListFor("video");
-        console.log("📺 Qualités vidéo disponibles :", bitrates);
-      }, 2000);
-
-      // Gestion des changements de qualité
+      // 🔄 Détection et affichage des changements de qualité
       player.on(dashjs.MediaPlayer.events.QUALITY_CHANGE_RENDERED, (e) => {
-        lastQualityChangeTime.current = Date.now();
-        console.log(`🎬 Qualité appliquée : ${e.newQuality}`);
+        const bitrates = player.getBitrateInfoListFor("video");
+        console.log("🎬 Qualité appliquée :", e.newQuality);
+        lastQuality.current = e.newQuality; // Met à jour la dernière qualité appliquée
+        stableQualityTime.current = 0; // Réinitialise le temps de stabilité
       });
 
-      // Vérification du buffer et ajustement de la qualité
+      // ⏳ Surveillance du buffer et adaptation de la qualité
       qualityCheckInterval.current = setInterval(() => {
         if (playerRef.current) {
           const player = playerRef.current;
           const bufferLevel = player.getBufferLength();
           const activeQuality = player.getQualityFor("video");
-          const currentTime = Date.now();
+          const maxQuality = player.getBitrateInfoListFor("video").length - 1;
 
           console.log(`📡 Qualité actuelle : ${activeQuality} | Buffer : ${bufferLevel}s`);
 
-          // Si le buffer est trop faible, baisse la qualité
-          if (bufferLevel < 3 && currentTime - lastQualityChangeTime.current > 8000) {
-            console.warn("⚠️ Buffer bas ! Réduction de la qualité...");
-            player.setQualityFor("video", Math.max(0, activeQuality - 1));
+          // 1️⃣ Si le buffer est trop bas, on réduit immédiatement la qualité
+          if (bufferLevel < 3) {
+            console.warn("⚠️ Buffer faible ! Rétrogradation de la qualité...");
+            const newQuality = Math.max(0, activeQuality - 1);
+            player.setQualityFor("video", newQuality);
+            stableQualityTime.current = 0; // Reset du temps stable
           }
 
-          // Si le buffer est stable et reste au-dessus de 20s pendant 10s, on augmente la qualité
-          if (bufferLevel > 20 && currentTime - lastQualityChangeTime.current > 10000) {
-            console.log("🚀 Buffer stable pendant 10s, on peut augmenter la qualité...");
-            const maxQuality = player.getBitrateInfoListFor("video").length - 1;
-            player.setQualityFor("video", Math.min(maxQuality, activeQuality + 1));
+          // 2️⃣ Si le buffer est stable pendant 15 secondes, on peut essayer d'augmenter
+          else if (bufferLevel > 15) {
+            stableQualityTime.current += 5; // On ajoute le temps du check (5s)
+            if (stableQualityTime.current >= 90 && activeQuality < maxQuality) {
+              console.log("🚀 Buffer stable pendant 15s, amélioration de la qualité...");
+              // const newQuality = activeQuality + 1;
+
+              const newQuality = Math.min(activeQuality + 1, lastQuality.current + 1); // Augmente d'une seule étape max
+              player.setQualityFor("video", newQuality);
+
+
+
+              // player.setQualityFor("video", newQuality);
+              stableQualityTime.current = 0; // On remet à zéro le compteur
+            }
           }
         }
       }, 5000);
@@ -83,8 +91,13 @@ const VideoPlayer = () => {
 
   return (
     <div style={{ textAlign: "center", marginTop: "20px" }}>
-      <h1>📡 Lecteur DASH avec ABR amélioré</h1>
-      <video ref={videoRef} controls muted style={{ width: "80%", border: "2px solid black" }} />
+      <h1>📡 Lecteur DASH avec Stabilisation</h1>
+      <video 
+        ref={videoRef} 
+        controls 
+        muted 
+        style={{ width: "80%", border: "2px solid black" }}
+      />
     </div>
   );
 };
