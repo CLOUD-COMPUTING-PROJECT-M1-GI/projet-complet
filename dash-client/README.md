@@ -1,50 +1,179 @@
-# React + TypeScript + Vite
+# README - Client DASH
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+## Description
 
-Currently, two official plugins are available:
+Ce répertoire contient le code source et les configurations nécessaires pour mettre en œuvre le **client DASH** du projet de streaming adaptatif. Le client est basé sur **React** et utilise la bibliothèque **Dash.js** pour lire le flux vidéo adaptatif. Il implémente un algorithme personnalisé pour ajuster dynamiquement la qualité du flux en fonction des conditions réseau.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+Le client communique avec le serveur DASH pour télécharger les segments vidéo appropriés et garantir une expérience utilisateur fluide, même sous des conditions réseau fluctuantes.
 
-## Expanding the ESLint configuration
+---
 
-If you are developing a production application, we recommend updating the configuration to enable type aware lint rules:
+## Structure du Répertoire
 
-- Configure the top-level `parserOptions` property like this:
+Voici l'arborescence du répertoire :
 
-```js
-export default tseslint.config({
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
+```
+dash-client/
+├── src/
+│   ├── VideoPlayer.js
+│   └── ...
+├── public/
+├── node_modules/
+├── .gitignore
+├── Dockerfile
+├── package-lock.json
+├── package.json
+├── README.MD
 ```
 
-- Replace `tseslint.configs.recommended` to `tseslint.configs.recommendedTypeChecked` or `tseslint.configs.strictTypeChecked`
-- Optionally add `...tseslint.configs.stylisticTypeChecked`
-- Install [eslint-plugin-react](https://github.com/jsx-eslint/eslint-plugin-react) and update the config:
+### Description des Fichiers et Répertoires
 
-```js
-// eslint.config.js
-import react from 'eslint-plugin-react'
+- **src/** : Contient les fichiers source principaux du client React.
+  - **VideoPlayer.js** : Composant principal responsable de la lecture du flux vidéo et de l'adaptation dynamique de la qualité.
+- **public/** : Répertoire contenant les fichiers statiques (par exemple, `index.html`).
+- **node_modules/** : Répertoire contenant les dépendances Node.js installées automatiquement via `npm install`.
+- **.gitignore** : Fichier spécifiant les fichiers ou répertoires à ignorer par Git.
+- **Dockerfile** : Configuration pour construire l'image Docker du client.
+- **package-lock.json** & **package.json** : Fichiers de configuration pour les dépendances Node.js.
+- **README.MD** : Ce fichier.
 
-export default tseslint.config({
-  // Set the react version
-  settings: { react: { version: '18.3' } },
-  plugins: {
-    // Add the react plugin
-    react,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended rules
-    ...react.configs.recommended.rules,
-    ...react.configs['jsx-runtime'].rules,
-  },
-})
+---
+
+## Instructions d'Installation et de Lancement
+
+### Prérequis
+
+Assurez-vous d'avoir les outils suivants installés :
+
+- **Docker** (version 20.10 ou supérieure)
+- **Node.js** (version 18 ou supérieure)
+
+---
+
+### Étapes de Déploiement
+
+1. **Clonez le dépôt** :
+   ```bash
+   cd votre-repo/dash-client
+   ```
+
+2. **Construisez l'image Docker** :
+   ```bash
+   docker build -t dash-client .
+   ```
+
+3. **Démarrez le conteneur** :
+   ```bash
+   docker run -d --name dash-client -p 5173:5173 dash-client
+   ```
+
+4. **Vérifiez que le client est opérationnel** :
+   Accédez à [http://localhost:5173](http://localhost:5173) dans votre navigateur. Vous devriez voir une interface avec un lecteur vidéo configuré pour lire le flux DASH.
+
+---
+
+## Fonctionnalités Clés
+
+1. **Lecture DASH avec Dash.js** :
+   - Le client utilise Dash.js pour interpréter le fichier MPD et gérer le téléchargement des segments vidéo.
+
+2. **Algorithme d'Adaptation Personnalisé** :
+   - L'algorithme surveille régulièrement le niveau du buffer et ajuste la qualité du flux vidéo en fonction des conditions réseau.
+   - Il inclut une logique de stabilisation pour éviter les changements fréquents de qualité.
+
+3. **Interface Utilisateur** :
+   - Une interface simple et intuitive permet aux utilisateurs de visualiser le flux vidéo directement dans leur navigateur.
+
+---
+
+## Configuration de l'Algorithme d'Adaptation
+
+L'algorithme d'adaptation repose sur les paramètres suivants :
+
+- **Réduction de Qualité** :
+  - Si le buffer descend en dessous de 3 secondes, la qualité est immédiatement abaissée pour éviter les interruptions.
+  
+- **Augmentation de Qualité** :
+  - Si le buffer reste stable pendant plus de 15 secondes, la qualité peut être augmentée progressivement jusqu'à atteindre la meilleure résolution disponible.
+
+Ces paramètres sont configurés dans le fichier `VideoPlayer.js`.
+
+---
+
+## Exemple de Code Clé
+
+Voici un extrait du composant `VideoPlayer.js` montrant l'initialisation du lecteur Dash.js :
+
+```javascript
+import React, { useEffect, useRef } from "react";
+import dashjs from "dashjs";
+
+const VideoPlayer = () => {
+  const videoRef = useRef(null);
+  const playerRef = useRef(null);
+
+  useEffect(() => {
+    if (videoRef.current) {
+      const player = dashjs.MediaPlayer().create();
+      playerRef.current = player;
+
+      // Configuration avancée de l'ABR
+      player.updateSettings({
+        streaming: {
+          abr: {
+            ABRStrategy: "abrDynamic",
+            maxBitrate: { video: 5000000 },
+            minBitrate: { video: 100000 },
+            initialBitrate: { video: 500000 },
+          },
+        },
+      });
+
+      // Initialisation du lecteur
+      player.initialize(
+        videoRef.current,
+        "http://localhost:3000/manifest.mpd",
+        true
+      );
+
+      return () => {
+        player.destroy();
+      };
+    }
+  }, []);
+
+  return (
+    <div style={{ textAlign: "center", marginTop: "20px" }}>
+      <h1>Streaming Adaptatif DASH</h1>
+      <video
+        ref={videoRef}
+        controls
+        muted
+        style={{ width: "80%", border: "2px solid black" }}
+      />
+    </div>
+  );
+};
+
+export default VideoPlayer;
 ```
+
+---
+
+## Contributions
+
+Les contributions sont les bienvenues ! Pour contribuer, suivez ces étapes :
+
+1. Clonez le dépôt.
+2. Créez une branche pour vos modifications (`git checkout -b feature/nom-de-votre-feature`).
+3. Soumettez vos changements (`git commit -m "Description de votre modification"`).
+4. Envoyez une pull request.
+
+
+## Remerciements
+
+Nous remercions l'équipe enseignante du Master 1 Génie Informatique pour leur soutien et leurs précieux conseils tout au long de ce projet.
+
+---
+
+Si vous avez des questions ou besoin d'aide, n'hésitez pas à nous contacter ! 😊
