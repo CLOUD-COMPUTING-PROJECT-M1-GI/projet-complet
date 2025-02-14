@@ -35,11 +35,12 @@ const VideoPlayer = () => {
 
 
       // 📺 Initialisation du lecteur avec une vidéo DASH
-      player.initialize(videoRef.current, "https://dash.akamaized.net/envivio/EnvivioDash3/manifest.mpd", true);
+      player.initialize(videoRef.current, "http://192.168.185.22:3000/manifest.mpd", true);
 
       // 🔄 Détection et affichage des changements de qualité
       player.on(dashjs.MediaPlayer.events.QUALITY_CHANGE_RENDERED, (e) => {
         const bitrates = player.getBitrateInfoListFor("video");
+        console.log(bitrates);
         console.log("🎬 Qualité appliquée :", e.newQuality);
         lastQuality.current = e.newQuality; // Met à jour la dernière qualité appliquée
         stableQualityTime.current = 0; // Réinitialise le temps de stabilité
@@ -91,7 +92,7 @@ const VideoPlayer = () => {
 
   return (
     <div style={{ textAlign: "center", marginTop: "20px" }}>
-      <h1>📡 Lecteur DASH avec Stabilisation</h1>
+      <h1> Lecteur DASH avec Stabilisation</h1>
       <video 
         ref={videoRef} 
         controls 
